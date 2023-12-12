@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>CVE Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/moment.min.js"></script>
+</head>
+<body>
+    <div class="container"></div>
+    <h1>CVEfixes Database Filter</h1>
+    <div id="tabs">
+        <button class="tablink" onclick="openTab(event, 'Commits')" id="defaultOpen">Commits</button>
+        <button class="tablink" onclick="openTab(event, 'CWE')" id="defaultOpen">CWE</button>
+        <button class="tablink" onclick="openTab(event, 'Fixes')" id="defaultOpen">Fixes</button>
+    </div>
+
+    <div id="Commits" class="tabcontent">
+        <form id="filterFormCommits" >
+            <div class="form-row">
+                <label for="repoUrl">Repo URL:</label>
+                <input type="text" id="repoUrl" name="repo_url"><br>
+                <label for="author">Author:</label>
+                <input type="text" id="author" name="author"><br>
+                <label for="year">Year:</label>
+                <select id="year" name="year">
+                    <option value="">Select Year</option>
+                    {% for year in range(1999, 2023) %}
+                    <option value="{{ year }}">{{ year }}</option>
+                    {% endfor %}
+                </select>
+                <br>
+            </div>
+            <div class="form-row">
+                <input type="submit" value="Filter Data">
+            </div>
+        </form>
+    </div>
+
+    <div id="CWE" class="tabcontent">
+        <form id="filterCWEForm">
+            <div class="form-row">
+                <label for="cwe_id">CWE ID:</label>
+                <input type="text" id="cwe_id" name="cwe_id"><br>
+                <label for="cwe_name">CWE Name:</label>
+                <input type="text" id="cwe_name" name="cwe_name"><br>
+                <label for="cwe_url">CWE URL:</label>
+                <input type="text" id="cwe_url" name="cwe_url"><br>
+            </div>
+            <div class="form-row">
+                <input type="submit" value="Filter Data">
+            </div>
+        </form>
+    </div>
+
+    <div id="Fixes" class="tabcontent">
+        <form id="filterFixesForm">
+            <div class="form-row">
+                <label for="cve_id">CVE ID:</label>
+                <input type="text" id="cve_id" name="cve_id"><br>
+                <label for="hash">Hash:</label>
+                <input type="text" id="hash" name="hash"><br>
+                <label for="fix_repo_url">Repo URL:</label>
+                <input type="text" id="fix_repo_url" name="repo_url"><br>
+            </div>
+            <div class="form-row">
+                <input type="submit" value="Filter Data">
+            </div>
+        </form>
+    </div>
+
+    <div id="results" class="results"></div>
+
+    <!-- Data Visualization Chart (Every Year) -->
+    <div class="charts-row">
+        <div class="chart-container">
+            <canvas id="commitChart"></canvas>
+        </div>
+        <div class="chart-container">
+            <canvas id="monthlyCommitsChart"></canvas>
+        </div>
+    </div>
+    
+
+    <style>
+        html {
+            height: 100%;
+        }
+        body {
+            min-height: 100%;
+            margin: 0; /* Remove default margin */
+            font-family: Arial, sans-serif;
+            text-align: center; /* Center-align text */
+            background-image: linear-gradient(180deg, rgb(23, 23, 56), rgb(219, 222, 235));
+            background-attachment: fixed; /* Keep the background fixed in place */
+            color: white; /* Set text color to white */
+        }
+
+        .chart-container {
+            /* width: 400px; /* Adjust the width as needed */
+            /* height: 400px; /* Adjust the height as needed */
+            height:30vh;
+            width:40vw;
+            margin-top: 50px;
+            position: relative;
+            display: inline-block; /* This will allow multiple charts side by side */
+        }
+
+        charts-row {
+            display: flex;
+            justify-content: space-around; /* This will space out your charts evenly */
+        }
+
+
+        .container {
+            margin: auto;
+            width: 50%; /* Adjust width as needed */
+            padding: 10px;
+        }
+
+        .form-row {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 10px; /* Adjust the margin as needed */
+        }
+
+        .form-row label {
+            margin-right: 10px; /* Spacing between label and input */
+        }
+
+        label {
+            min-width: 100px; /* Adjust the width as needed to ensure alignment */
+            text-align: right; /* Aligns the text to the right */
+        }
+
+        #tabs {
+            overflow: hidden;
+            background-color: #333;
+            text-align: center;  /* Center the tabs */
+        }
+
+        .results {
+            height: 300px; /* or any other height */
+            overflow: scroll; /* Makes the div scrollable */
+            margin-top: 20px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        table {
+            width: 70%;
+            border-collapse: collapse;
+            margin: auto;
+            margin-top: 20px; /* Spacing above the table */
+            border: 3px solid;
+            background-color: white; /* Set the table background to white */
+        }
+
+        th, td {
+            border: 1px solid black;
+            padding: 8px;
+            text-align: left;
+            color: black; /* Set text color inside table cells to black for contrast */
+        }
+
+        th {
+            background-color: #f2f2f2;
+        }
+
+        form {
+            display: inline-block; /* Align form content */
+            margin-top: 20px;
+            text-align: left; /* Align form elements to the left */
+        }
+
+        select, input[type="text"] {
+            margin: 5px 0; /* Spacing for form elements */
+        }
+
+        .tabcontent {
+            display: none;
+            padding: 6px 12px;
+            border: 1px solid #ccc;
+            border-top: none;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .tablink {
+            background-color: #555;
+            float: left; /* Align tabs to the left */
+            color: white;
+            border: none;
+            outline: none;
+            cursor: pointer;
+            padding: 14px 16px;
+            font-size: 17px;
+            transition: 0.3s;
+            width: 33.33%;
+        }
+
+        .tablink:hover {
+            background-color: #777;
+        }
+
+        /* Style the tab content */
+        .tabcontent {
+            display: none;
+            padding: 6px 12px;
+            border: 1px solid #ccc;
+            border-top: none;
+            text-align:left; /* Center-align text within tabcontent */
+        }
+
+        /* Clearfix (clear floats) */
+        .tablink::after {
+            content: "";
+            clear: both;
+            display: table;
+        }
+
+        #filterFormCommits {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        #filterCWEForm {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px; /* Adjust the space between rows as needed */
+        }
+
+        #filterFixesForm {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px; /* Adjust the space between rows as needed */
+        }
+
+    </style>
+
+
+
+    <script>
+        //Commits Table JS
+        document.getElementById('filterFormCommits').onsubmit = function(event) {
+            event.preventDefault();
+            const formData = new FormData(this);
+            const selectedYear = formData.get('year'); // Get the selected year from the form data
+            fetch('/filter_commits?' + new URLSearchParams(formData))
+                .then(response => response.json())
+                .then(data => {
+                    let results = document.getElementById('results');
+                    results.innerHTML = ''; // Clear previous results
+                    let table = document.createElement('table');
+                    // Create header row
+                    let headerRow = table.insertRow();
+                    let headers = ['Author', 'Author Date', 'Author Timezone', 'Repo URL']; // Add more headers as needed
+                    headers.forEach(headerText => {
+                        let header = document.createElement('th');
+                        let textNode = document.createTextNode(headerText);
+                        header.appendChild(textNode);
+                        headerRow.appendChild(header);
+                    });
+
+                    // Create data rows
+                    data.forEach(item => {
+                        let row = table.insertRow();
+                        Object.values(item).forEach(text => {
+                            let cell = row.insertCell();
+                            let textNode = document.createTextNode(text);
+                            cell.appendChild(textNode);
+                        });
+                    });
+                    results.appendChild(table);
+                })
+                .catch(error => {
+                    console.error('There has been a problem with your fetch operation:', error);
+                });
+        };
+        
+
+        function clearMonthlyChart() {
+            const ctx = document.getElementById('monthlyCommitChart').getContext('2d');
+            if (window.monthlyCommitChart) {
+                window.monthlyCommitChart.destroy();
+            }
+            window.monthlyCommitChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Commits per Month',
+                        data: [],
+                        backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                        borderColor: 'rgba(54, 162, 235, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+
+        //CWE Table JS
+        document.getElementById('filterCWEForm').onsubmit = function(event) {
+        event.preventDefault();
+        const formData = new FormData(this);
+            fetch('/filter_cwe?' + new URLSearchParams(formData))
+                .then(response => response.json())
+                .then(data => {
+                    let results = document.getElementById('results');
+                    results.innerHTML = ''; // Clear previous results
+                    let table = document.createElement('table');
+                    // Create header row
+                    let headerRow = table.insertRow();
+                    let headers = ['CWE ID', 'CWE Name', 'URL']; // Add more headers as needed
+                    headers.forEach(headerText => {
+                        let header = document.createElement('th');
+                        let textNode = document.createTextNode(headerText);
+                        header.appendChild(textNode);
+                        headerRow.appendChild(header);
+                    });
+
+                    // Create data rows
+                    data.forEach(item => {
+                        let row = table.insertRow();
+                        Object.values(item).forEach(text => {
+                            let cell = row.insertCell();
+                            let textNode = document.createTextNode(text);
+                            cell.appendChild(textNode);
+                        });
+                    });
+                    results.appendChild(table);
+                })
+                .catch(error => {
+                    console.error('There has been a problem with your fetch operation:', error);
+                });
+        };
+
+        //Fixes Table JS
+        document.getElementById('filterFixesForm').onsubmit = function(event) {
+        event.preventDefault();
+        const formData = new FormData(this);
+            fetch('/filter_fixes?' + new URLSearchParams(formData))
+                .then(response => response.json())
+                .then(data => {
+                    let results = document.getElementById('results');
+                    results.innerHTML = ''; // Clear previous results
+                    let table = document.createElement('table');
+                    // Create header row
+                    let headerRow = table.insertRow();
+                    let headers = ['CVE ID', 'Hash', 'Repo URL']; // Add more headers as needed
+                    headers.forEach(headerText => {
+                        let header = document.createElement('th');
+                        let textNode = document.createTextNode(headerText);
+                        header.appendChild(textNode);
+                        headerRow.appendChild(header);
+                    });
+
+                    // Create data rows
+                    data.forEach(item => {
+                        let row = table.insertRow();
+                        Object.values(item).forEach(text => {
+                            let cell = row.insertCell();
+                            let textNode = document.createTextNode(text);
+                            cell.appendChild(textNode);
+                        });
+                    });
+                    results.appendChild(table);
+                })
+                .catch(error => {
+                    console.error('There has been a problem with your fetch operation:', error);
+                });
+        };
+
+        //Yearly Chart JS
+        document.getElementById('filterFormCommits').addEventListener('submit', function(event) {
+            event.preventDefault();
+            const year = document.getElementById('year').value;
+        
+            // Fetch the commit data
+            fetch('/commit_data?year=' + year)
+                .then(response => response.json())
+                .then(commitData => {
+                    // Render the chart
+                    const ctxYearly = document.getElementById('commitChart').getContext('2d');
+                    if (window.commitChartInstance) {
+                        window.commitChartInstance.destroy();
+                    }
+                    //const commitChart = new Chart(ctx, {
+                    window.commitChartInstance = new Chart(ctxYearly, {
+                        type: 'bar',
+                        data: commitData,
+                        options: {
+                            scales: {
+                                yAxes: [{
+                                    ticks: {
+                                        beginAtZero: true,
+                                        fontColor: 'black' // y-axis labels to black
+                                    }
+                                }]
+                            }
+                        },
+                        legend: {
+                            labels: {
+                                fontColor: 'black' // legend text to black
+                            }
+                        },
+                        title: {
+                            display: true,
+                            text: 'Commits per Year',
+                            fontColor: 'black' // title text to black
+                        }
+                    });
+                });
+                // Fetch the commit data for each month of the selected year
+                fetch('/commit_data_monthly?year=' + year)
+                    .then(response => response.json())
+                    .then(commitDataMonthly => {
+                        // Render the monthly chart
+                        const ctx = document.getElementById('monthlyCommitChart').getContext('2d');
+                        if (window.monthlyCommitChart) {
+                            window.monthlyCommitChart.destroy();
+                        }
+                        window.monthlyCommitChart = new Chart(ctx, {
+                            type: 'bar',
+                            data: commitDataMonthly,
+                            options: {
+                                scales: {
+                                    y: {
+                                        beginAtZero: true
+                                }
+                            }
+                        }
+                    });
+                });
+        });
+
+        //Monthly Chart JS
+        // function createMonthlyCommitsChart(year) {
+        //     fetch('/commit_data_monthly?year=' + year)
+        //         .then(response => response.json())
+        //         .then(data => {
+        //             const ctx = document.getElementById('monthlyCommitsChart').getContext('2d');
+        //             if (window.monthlyCommitsChartInstance) {
+        //                 window.monthlyCommitsChartInstance.destroy();
+        //             }
+        //             window.monthlyCommitsChartInstance = new Chart(ctx, {
+        //                 type: 'bar',
+        //                 data: data,
+        //                 options: {
+        //                     title: {
+        //                         display: true,
+        //                         text: 'Monthly Commits for ' + year
+        //                     },
+        //                     scales: {
+        //                         yAxes: [{
+        //                             ticks: {
+        //                                 beginAtZero: true
+        //                             }
+        //                         }],
+        //                         xAxes: [{
+        //                             ticks: {
+        //                                 callback: function(month, index, values) {
+        //                                     // Format month number to month name
+        //                                     return moment(month, 'MM').format('MMMM');
+        //                                 }
+        //                             }
+        //                         }]
+        //                     }
+        //                 }
+        //             });
+        //         })
+        //         .catch(error => console.error('Error:', error));
+        // }
+        document.addEventListener('DOMContentLoaded', (event) => {
+        document.getElementById('filterFormCommits').addEventListener('submit', function(event) {
+            event.preventDefault();
+            const selectedYear = document.getElementById('year').value;
+        
+            // Fetch and display the monthly commit data for the selected year
+            fetch('/commit_data_monthly?year=' + selectedYear)
+                .then(response => response.json())
+                .then(monthlyCommitData => {
+                    // Update the text and bar colors
+                    monthlyCommitData.datasets.forEach(dataset => {
+                        dataset.backgroundColor = 'blue';
+                        dataset.borderColor = 'darkblue';
+                    });
+
+                    const ctxMonthly = document.getElementById('monthlyCommitsChart').getContext('2d');
+                    if (window.monthlyCommitsChartInstance) {
+                        window.monthlyCommitsChartInstance.destroy();
+                    }
+                    window.monthlyCommitsChartInstance = new Chart(ctxMonthly, {
+                        type: 'bar',
+                        data: monthlyCommitData,
+                        options: {
+                            scales: {
+                                yAxes: [{
+                                    ticks: {
+                                        beginAtZero: true,
+                                        fontColor: 'black' // y-axis labels to black
+                                    }
+                                }],
+                                xAxes: [{
+                                    ticks: {
+                                        fontColor: 'black', // x-axis labels to black
+                                        // Convert month numbers to names if you want
+                                        callback: function(value, index, values) {
+                                            return moment(value, 'MM').format('MMMM');
+                                        }
+                                    }
+                                }]
+                            },
+                            legend: {
+                                labels: {
+                                    fontColor: 'black' // legend text to black
+                                }
+                            },
+                            title: {
+                                display: true,
+                                text: 'Monthly Commits for ' + selectedYear,
+                                fontColor: 'black' // title text to black
+                            }
+                        }
+                    });
+                })
+                .catch(error => {
+                    console.error('Error fetching monthly commit data:', error);
+                });
+        });
+        });
+
+        // Hook into the existing form submission for commits
+        document.getElementById('filterFormCommits').addEventListener('submit', function(event) {
+            event.preventDefault();
+            const year = document.getElementById('year').value;
+            if (year) {
+                createMonthlyCommitsChart(year);
+            } else {
+                console.error('Please select a year.');
+            }
+        });
+
+        
+
+        function openTab(evt, tabName) {
+            var i, tabcontent, tablinks;
+            tabcontent = document.getElementsByClassName("tabcontent");
+            for (i = 0; i < tabcontent.length; i++) {
+                tabcontent[i].style.display = "none";
+            }
+            tablinks = document.getElementsByClassName("tablink");
+            for (i = 0; i < tablinks.length; i++) {
+                tablinks[i].className = tablinks[i].className.replace(" active", "");
+            }
+            document.getElementById(tabName).style.display = "block";
+            evt.currentTarget.className += " active";
+        }
+
+        // Get the element with id="defaultOpen" and click on it
+        document.getElementById("defaultOpen").click();
+    </script>
+</body>
+</html>
